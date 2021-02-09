@@ -1,6 +1,7 @@
 package com.example.nio;
 
 import com.example.nio.bean.MsgBean;
+import com.example.nio.utils.MyUtils;
 import org.junit.Test;
 
 import java.io.File;
@@ -8,6 +9,7 @@ import java.io.FileInputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
+import java.util.Date;
 
 import static com.example.nio.utils.MyUtils.bufSize;
 
@@ -16,7 +18,6 @@ import static com.example.nio.utils.MyUtils.bufSize;
  * https://blog.csdn.net/qq_21539671/article/details/98743397
  * https://blog.csdn.net/c_o_d_e_/article/details/113092095
  * Android网络编程(十四) 之 Socket与NIO: https://blog.csdn.net/lyz_zyx/article/details/104062815
- *
  */
 
 public class NIOMain {
@@ -204,22 +205,55 @@ public class NIOMain {
     }
 
     @Test
-    public void test11(){
+    public void test11() {
         byte[] bytes = {2, 0, 0, 0, 0, 0, 0, 0, 0, 56, 68, 91, 80, 49, 48, 50, 48, 55, 45, 49, 51, 48, 52, 53, 49, 46, 106, 112, 103, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         MsgBean struct = MsgBean.getStruct(bytes);
         System.out.println(struct);
     }
+
     @Test
-    public void test12(){
+    public void test12() {
         long res = -1L;
         System.out.println(res);
     }
 
     @Test
-    public void test13(){
+    public void test13() {
 
         int i = bufSize(3687515L);
         System.out.println(i);
     }
 
+    @Test
+    public void test14() {
+        long test = 200L;
+        System.out.println(test > 0);
+    }
+
+    @Test
+    public void test15() {
+        int i = bufSize(1024 * 1024 * 1024);
+        System.out.println(i);
+    }
+
+    @Test
+    public void test16() {
+        String name = "D:" + File.separator + "fileName.txt";
+        //File testFile = new File(name);
+        MyUtils.createFile("fileName.txt");
+    }
+
+    @Test
+    public void test17() {
+        long size = 301640315L;
+        long temp = 0;
+        long sended = 0;
+        for (long i = 0; i < size; i += 4000000) {
+            sended = 100 * i / size;
+            if (sended != temp) {
+                temp = sended;
+                System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 已发送：" + sended + "%");
+            }
+        }
+    }
 }

@@ -3,6 +3,8 @@ package com.example.nio;
 import com.example.nio.bean.MsgBean;
 import com.example.nio.utils.MyUtils;
 
+import javax.xml.transform.Source;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -24,6 +26,9 @@ public class TCPServer {
 
 
     private String fileWholeName;
+    private String fileWholePath = "F:/0.圣贤教育/0.圣贤教育改变命运/50.此生必听的一堂音乐课.mp4";
+    private String fileName = "50.此生必听的一堂音乐课.mp4";
+
     private boolean transfering = false;
 
     public void init() {
@@ -93,6 +98,7 @@ public class TCPServer {
         // 注册读就绪事件
         mClient.register(mSelector, SelectionKey.OP_READ);
         System.out.println(TAG + "服务端 同意 客户端(" + mClient.getRemoteAddress() + ") 的连接请求");
+
     }
 
     //不应为每次读取分配一次ByteBuffer
@@ -103,6 +109,9 @@ public class TCPServer {
         if (null == byteBufMsg) byteBufMsg = ByteBuffer.allocate(64);
         //读取服务器发送来的数据到缓冲区中
         int bytesRead = client.read(byteBufMsg);
+        byteBufMsg.flip();
+
+
         //发送来的消息 非空，那么读取
         if (bytesRead > 0) {
             //对消息进行处理，若发来的是文件，那么返回文件大小（byte）
@@ -122,6 +131,7 @@ public class TCPServer {
                 while (writed < fileLength) {
                     //while ((len = client.read(byteBufContent)) > 0) {
                     len = client.read(byteBufContent);
+
                     //这里睡 10ms 很关键！这里是多线程的问题；TODO:多线程解决这个愚蠢的解决方式……
                     if (len <= 0) {
                         Thread.sleep(5);
@@ -140,19 +150,6 @@ public class TCPServer {
 
                 fileChannel.close();
                 transfering = false;
-                //TODO:回收 byteBufContent
-            
-           /* String inMsg = new String(byteBuffer.array(), 0, bytesRead);
-            if ("Hello".equals(inMsg)) {
-                sendMsg(selectionKey, inMsg);
-                return;
-            }
-            // 处理数据
-            //responseMsg(selectionKey, inMsg);
-            try {
-                receiveFile(selectionKey);
-            } catch (Exception e) {
-            }*/
             }
         }
     }
@@ -170,13 +167,14 @@ public class TCPServer {
             sendBuffer.put(msgBytesList.get(0));
             sendBuffer.flip();
             msgBytesList.remove(0);
+            client.write(sendBuffer);
+            sendBuffer.clear();
         }
 
 
-        client.write(sendBuffer);
         sendBuffer.clear();
         msgBytes = null;
-        //mClient.register(mSelector, SelectionKey.OP_READ);
+        client.register(mSelector, SelectionKey.OP_READ);
     }
 
     private long handleReceivedMsg(SelectionKey selectionKey, byte[] array) throws Exception {
@@ -212,22 +210,22 @@ public class TCPServer {
                 break;
 
             case MsgBean.ORDER_ALLOW_SEND://允许接收文件
-                System.out.println("服务器：这就发送文件去！");
-                //String path = "D:/OneDrive/图片/本机照片/test.txt";
-                //sendFile(selectionKey, path);
+                System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 服务器：这就发送文件去！可读？" + selectionKey.isReadable() + " ; 可写？" + selectionKey.isWritable());
+                sendFile(selectionKey, fileWholePath);
                 break;
             case MsgBean.ORDER_REJECT_SEND://拒绝接收文件
+                System.out.println("客户端拒绝接收文件！");
                 break;
             case MsgBean.ORDER_SEND_STR://谨发送消息
                 System.out.println("Client:" + msgBeanReceived.fileName);
                 if ("Test".equals(msgBeanReceived.fileName)) {
-                    msgBean4Send = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, "test.txt", 8);
+                    long fileSize = new File(fileWholePath).length();
+                    msgBean4Send = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, fileName, fileSize);
                     sendMsg(selectionKey, msgBean4Send);
 
-                    Thread.sleep(2000);
-                    System.out.println("服务器：这就发送文件去！");
-                    String path = "D:/OneDrive/图片/本机照片/test.txt";
-                    sendFile(selectionKey, path);
+                    //System.out.println("服务器：这就发送文件去！");
+                    //String path = "D:/OneDrive/图片/本机照片/test.txt";
+                    //sendFile(selectionKey, path);
                 }
 
                /* if (null == scanner) scanner = new Scanner(System.in);
@@ -260,7 +258,7 @@ public class TCPServer {
         msgBytesList.add(msgBytes);
         client.register(mSelector, SelectionKey.OP_WRITE);
         mSelector.wakeup();
-        System.out.println(TAG + "服务端 给 客户端" + " 发送数据：" + msg + selectionKey.isReadable() + " ; " + selectionKey.isWritable());
+        System.out.println(TAG + " 服务端 给 客户端" + " 发送数据：" + msg + selectionKey.isReadable() + " ; " + selectionKey.isWritable());
     }
 
     /**
@@ -346,20 +344,32 @@ public class TCPServer {
         int writed = 0;
         while (writed < size) {
             len = fileChannel.read(byteBufFile);
+            if(len<0){
+                Thread.sleep(5);
+                continue;
+            }
             writed += len;
             byteBufFile.flip();
             while (byteBufFile.hasRemaining()) {//保证字节全部写入
-
                 client.write(byteBufFile);
             }
             byteBufFile.clear();
-            System.out.println("已发送：" + writed);
+            sended =  100 * (long)writed / size;
+            if (sended!= temp) {
+                temp = sended;
+                System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 已发送：" + sended + "%");
+            }
         }
         fileChannel.close();
         fis.close();
 
-        System.out.println("已发送：" + path);
+        System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 已发送：" + path);
+        client.register(mSelector, SelectionKey.OP_READ);
     }
+
+    long temp = 0;
+    long sended = 0;
+
 
     //使用Map保存每个客户端传输，当OP_READ通道可读时，根据channel找到对应的对象
     Map<SelectableChannel, FileData> map = new ConcurrentHashMap<>();

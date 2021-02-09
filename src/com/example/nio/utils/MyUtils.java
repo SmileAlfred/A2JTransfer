@@ -59,6 +59,7 @@ public class MyUtils {
         if (GB > 0) return 1024 * 1024 * 1024;// ?GB
         if (MB > 0) return 1024 * 1024;// ?MB
         if (KB > 0) return 1024;
+        if (KB == 0)return (int) size;
         return 1024 * 1024;
     }
 
