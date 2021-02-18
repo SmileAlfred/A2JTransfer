@@ -2,7 +2,9 @@ package com.example.nio;
 
 import com.example.nio.bean.MsgBean;
 import com.example.nio.utils.MyUtils;
+import com.sun.org.apache.xerces.internal.impl.dv.xs.FullDVFactory;
 import org.junit.Test;
+import org.junit.experimental.theories.suppliers.TestedOn;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -10,8 +12,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 import static com.example.nio.utils.MyUtils.bufSize;
+import static com.example.nio.utils.MyUtils.filePath;
 
 /**
  * 参考文档：
@@ -256,4 +260,65 @@ public class NIOMain {
             }
         }
     }
+
+    @Test
+    public void test18() {
+        String path = "F:/0.圣贤教育/0.圣贤教育改变命运";
+        File file = new File(path);
+        List<String> names = MyUtils.func(file);
+        for (String s : names) {
+            System.out.println(s);
+        }
+    }
+
+    @Test
+    public void test19() {
+        String filePath = "D:/release";
+        String dir = filePath.substring(filePath.lastIndexOf('/') + 1, filePath.length());
+        System.out.println(dir);
+    }
+
+    @Test
+    public void test20() {
+        long fileLength = 68623L;
+        int bufferSize = 1024 * 16;
+        int writed = 68637;
+
+        int length = (int) (fileLength % bufferSize);
+        System.out.println("剩余文件长度：" + length + " B");                      //3087
+        System.out.println("offset：" + (int) (fileLength % bufferSize + 1));      //3088
+        System.out.println("文件信息：" + (writed - (int) fileLength));          //14
+    }
+
+    @Test
+    public void test21() {
+        long size = 1024 * 1024 * 1024 * 1024L + 102;  //1T   1099511627776
+        int size3 = 1024 * 1024 * 1024 ;
+        System.out.println(size % size3);                 //86116470784     80G
+    }
+
+    @Test
+    public void test22(){
+        String str = "abcde";
+
+        ByteBuffer buf = ByteBuffer.allocate(16);
+
+        buf.put(str.getBytes());
+
+        buf.flip();
+
+        byte[] dst = new byte[buf.limit()]; //dst.length() = 5;
+        buf.get(dst, 0, 2);
+        System.out.println(new String(dst, 0, 2));  //ab
+        System.out.println(buf.position()); //2
+
+
+
+        byte[] dst2 = new byte[buf.limit()];
+        buf.get(dst2, buf.position(), (buf.limit() - buf.position()));
+        System.out.println(new String(dst2, 0, dst2.length));  //ab
+
+    }
+
+
 }

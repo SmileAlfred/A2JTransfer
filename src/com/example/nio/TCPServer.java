@@ -3,7 +3,6 @@ package com.example.nio;
 import com.example.nio.bean.MsgBean;
 import com.example.nio.utils.MyUtils;
 
-import javax.xml.transform.Source;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -15,6 +14,10 @@ import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 发现的问题：还是得，SelectionKey 的状态切换需要时间，尤其是在写出时，因为写出时需要单独的一个滑行操作；
+ * TODO：或者说，使用线程？或者同步锁？会不会解决这个问题呢？而且休眠时间和发送文件大小有关，小于1M的文件，sleep 10ms 即可，而大文件就需要 sleep 1s
+ */
 public class TCPServer {
     private final static String TAG = TCPServer.class.getSimpleName();
     private Scanner scanner;
@@ -26,10 +29,11 @@ public class TCPServer {
 
 
     private String fileWholeName;
-    private String fileWholePath = "F:/0.圣贤教育/0.圣贤教育改变命运/50.此生必听的一堂音乐课.mp4";
-    private String fileName = "50.此生必听的一堂音乐课.mp4";
+    private String filePath;
+    private String fileName;
+    private List<String> names = new ArrayList<>();
 
-    private boolean transfering = false;
+    private boolean transfering, isSendDir;
 
     public void init() {
         msgBytesList = new ArrayList<>();
@@ -154,7 +158,7 @@ public class TCPServer {
         }
     }
 
-    private void handleWrite(SelectionKey selectionKey) throws IOException {
+    private void handleWrite(SelectionKey selectionKey) throws Exception {
         if (null == msgBytes) {
             return;
         }
@@ -210,8 +214,26 @@ public class TCPServer {
                 break;
 
             case MsgBean.ORDER_ALLOW_SEND://允许接收文件
-                System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 服务器：这就发送文件去！可读？" + selectionKey.isReadable() + " ; 可写？" + selectionKey.isWritable());
-                sendFile(selectionKey, fileWholePath);
+                if (!isSendDir) {
+                    System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 服务器：这就发送文件去！可读？" + selectionKey.isReadable() + " ; 可写？" + selectionKey.isWritable());
+                    sendFile(selectionKey, filePath + fileName);
+                } else {
+                    System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 服务器：这就发送文件去！可读？" + selectionKey.isReadable() + " ; 可写？" + selectionKey.isWritable());
+                    sendFile(selectionKey, filePath + fileName);
+
+                    names.remove(0);
+                    if (names.size() < 1) {
+                        System.out.println("传输完成！");
+                        isSendDir = false;
+                        break;
+                    }
+                    fileName = "/" + names.get(0);
+                    long fileSize = new File(filePath + fileName).length();
+                    msgBean4Send = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, fileName, fileSize);
+
+                    sendMsg(selectionKey, msgBean4Send);
+                }
+
                 break;
             case MsgBean.ORDER_REJECT_SEND://拒绝接收文件
                 System.out.println("客户端拒绝接收文件！");
@@ -219,7 +241,34 @@ public class TCPServer {
             case MsgBean.ORDER_SEND_STR://谨发送消息
                 System.out.println("Client:" + msgBeanReceived.fileName);
                 if ("Test".equals(msgBeanReceived.fileName)) {
-                    long fileSize = new File(fileWholePath).length();
+                    System.out.print("文件路径：");
+                    scanner = new Scanner(System.in);
+                    filePath = (scanner.next()).replace("\\", "/");//"F:/0.圣贤教育/0.圣贤教育改变命运";
+                    //filePath = "D:/release";//D:\OneDrive\图片\本机照片\北京地标
+                    System.out.print("文件名：");
+                    String inputName = scanner.next();
+                    //如果输入的文件名是 ... 表示传输整个文件夹
+                    if ("...".equals(inputName)) {
+                        isSendDir = true;
+                        //TODO:获取文件名构成集合
+                        File file = new File(filePath);
+                        if (names.size() > 0) names.clear();
+                        names = MyUtils.func(file);
+                        if (names.size() < 1) {
+                            System.out.println("目录为空！");
+                            break;
+                        }
+
+                        fileName = "/" + names.get(0);
+                        long fileSize = new File(filePath + fileName).length();
+                        msgBean4Send = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, fileName, fileSize);
+                        sendMsg(selectionKey, msgBean4Send);
+                        break;
+
+                    }
+
+                    fileName = "/" + inputName;
+                    long fileSize = new File(filePath + fileName).length();
                     msgBean4Send = new MsgBean(MsgBean.ORDER_REQUEST_IS_RECEIVE, fileName, fileSize);
                     sendMsg(selectionKey, msgBean4Send);
 
@@ -250,7 +299,7 @@ public class TCPServer {
      * @param msg
      * @throws IOException
      */
-    public void sendMsg(SelectionKey selectionKey, MsgBean msg) throws IOException {
+    public void sendMsg(SelectionKey selectionKey, MsgBean msg) throws Exception {
         SocketChannel client = (SocketChannel) selectionKey.channel();
         //mSendMsg = msg;
         msgBytes = msg.getBuf();
@@ -258,7 +307,7 @@ public class TCPServer {
         msgBytesList.add(msgBytes);
         client.register(mSelector, SelectionKey.OP_WRITE);
         mSelector.wakeup();
-        System.out.println(TAG + " 服务端 给 客户端" + " 发送数据：" + msg + selectionKey.isReadable() + " ; " + selectionKey.isWritable());
+        System.out.println(TAG + " 服务端 给 客户端" + " 发送数据：" + msg + " ; 可读？" + selectionKey.isReadable() + " ;可写？ " + selectionKey.isWritable());
     }
 
     /**
@@ -344,7 +393,7 @@ public class TCPServer {
         int writed = 0;
         while (writed < size) {
             len = fileChannel.read(byteBufFile);
-            if(len<0){
+            if (len < 0) {
                 Thread.sleep(5);
                 continue;
             }
@@ -354,8 +403,8 @@ public class TCPServer {
                 client.write(byteBufFile);
             }
             byteBufFile.clear();
-            sended =  100 * (long)writed / size;
-            if (sended!= temp) {
+            sended = 100 * (long) writed / size;
+            if (sended != temp) {
                 temp = sended;
                 System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 已发送：" + sended + "%");
             }
@@ -365,6 +414,10 @@ public class TCPServer {
 
         System.out.println("[" + MyUtils.timeFormat.format(new Date()) + "] 已发送：" + path);
         client.register(mSelector, SelectionKey.OP_READ);
+
+        long sleepTime = size > 1000 ? 500 : 50;
+        //注意 这里必须要睡觉一小下，因为，SelectionKey 的状态切换需要时间！
+        Thread.sleep(sleepTime);
     }
 
     long temp = 0;

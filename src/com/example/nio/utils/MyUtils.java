@@ -3,7 +3,9 @@ package com.example.nio.utils;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * @author SmileAlfred
@@ -75,4 +77,26 @@ public class MyUtils {
         return stringBuffer.insert(positoin, des).toString();
 
     }
+
+    /**
+     * 遍历 目录中 所有文件
+     * @param file File file = new File(path);
+     */
+    public static List<String> func(File file) {
+        String path = file.getAbsolutePath().replace("\\", "/");
+        List<String> fileNameList = new ArrayList<>();
+        File[] fs = file.listFiles();
+        for (File f : fs) {
+            if (f.isDirectory())    //若是目录，则递归打印该目录下的文件
+                func(f);
+            if (f.isFile()) {        //若是文件，直接打印
+                String newFileName = f.getAbsolutePath().replace("\\", "/");
+                String[] paths = newFileName.split("/");
+
+                fileNameList.add(newFileName.replaceAll(path+"/",""));
+            }
+        }
+        return fileNameList;
+    }
+
 }
